@@ -22,7 +22,7 @@
     map/dense/filtered: false
     map/sparse/leafSize: 0.25
 
-    odom/gravity: 9.80665
+    odom/gravity: 0.0
     odom/computeTimeOffset: true
 
     odom/imu/approximateGravity: false
