@@ -47,7 +47,7 @@ void dlio::MapNode::getParams() {
 }
 
 void dlio::MapNode::start() {
-}
+} 
 
 void dlio::MapNode::callbackKeyframe(const sensor_msgs::msg::PointCloud2::ConstSharedPtr& keyframe) {
 

@@ -20,8 +20,8 @@ def generate_launch_description():
 
     # Set default arguments
     rviz = LaunchConfiguration('rviz', default='false')
-    pointcloud_topic = LaunchConfiguration('pointcloud_topic', default='points_raw')
-    imu_topic = LaunchConfiguration('imu_topic', default='imu_raw')
+    pointcloud_topic = LaunchConfiguration('pointcloud_topic', default='/livox/lidar_inverted')
+    imu_topic = LaunchConfiguration('imu_topic', default='/livox/imu_inverted')
 
     # Define arguments
     declare_rviz_arg = DeclareLaunchArgument(
@@ -53,7 +53,7 @@ def generate_launch_description():
         remappings=[
             ('pointcloud', pointcloud_topic),
             ('imu', imu_topic),
-            ('odom', 'dlio/odom_node/odom'),
+            ('odom', '/Odometry'),
             ('pose', 'dlio/odom_node/pose'),
             ('path', 'dlio/odom_node/path'),
             ('kf_pose', 'dlio/odom_node/keyframes'),
