@@ -21,6 +21,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_ros/transform_broadcaster.h>
+#include <std_srvs/srv/set_bool.hpp> // Added for ROS 2 service
 
 // BOOST
 #include <boost/format.hpp>
@@ -363,4 +364,9 @@ private:
   double geo_abias_max_;
   double geo_gbias_max_;
 
+  std::atomic<bool> is_paused;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr pause_srv;
+  void callbackPause(const std::shared_ptr<std_srvs::srv::SetBool::Request> req,
+                     std::shared_ptr<std_srvs::srv::SetBool::Response> res);
+  
 };

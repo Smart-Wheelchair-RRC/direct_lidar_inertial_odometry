@@ -29,6 +29,10 @@ dlio::MapNode::MapNode(): Node("dlio_map_node") {
   this->save_pcd_srv = this->create_service<direct_lidar_inertial_odometry::srv::SavePCD>("save_pcd",
       std::bind(&dlio::MapNode::savePCD, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, this->save_pcd_cb_group);
 
+  // New Reset Map Service
+  this->reset_map_srv = this->create_service<std_srvs::srv::Empty>("reset_map",
+      std::bind(&dlio::MapNode::resetMap, this, std::placeholders::_1, std::placeholders::_2));
+
   this->dlio_map = std::make_shared<pcl::PointCloud<PointType>>();
 
   pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
@@ -60,8 +64,12 @@ void dlio::MapNode::callbackKeyframe(const sensor_msgs::msg::PointCloud2::ConstS
   this->voxelgrid.setInputCloud(keyframe_pcl);
   this->voxelgrid.filter(*keyframe_pcl);
 
-  // save filtered keyframe to map for rviz
-  *this->dlio_map += *keyframe_pcl;
+  // Thread-safe update to the global map
+  {
+    std::lock_guard<std::mutex> lock(this->map_mutex);
+    // save filtered keyframe to map for rviz
+    *this->dlio_map += *keyframe_pcl;
+  }
 
   // publish full map
   if (this->dlio_map->points.size() == this->dlio_map->width * this->dlio_map->height) {
@@ -73,10 +81,15 @@ void dlio::MapNode::callbackKeyframe(const sensor_msgs::msg::PointCloud2::ConstS
   } 
 }
 
-void dlio::MapNode::savePCD(std::shared_ptr<direct_lidar_inertial_odometry::srv::SavePCD::Request> req,
+void dlio::MapNode::savePCD(const std::shared_ptr<direct_lidar_inertial_odometry::srv::SavePCD::Request> req,
                             std::shared_ptr<direct_lidar_inertial_odometry::srv::SavePCD::Response> res) {
 
-  pcl::PointCloud<PointType>::Ptr m = std::make_shared<pcl::PointCloud<PointType>>(*this->dlio_map);
+  // Thread-safe copy of the map for saving
+  pcl::PointCloud<PointType>::Ptr m;
+  {
+    std::lock_guard<std::mutex> lock(this->map_mutex);
+    m = std::make_shared<pcl::PointCloud<PointType>>(*this->dlio_map);
+  }
 
   float leaf_size = req->leaf_size;
   std::string p = req->save_path;
@@ -92,11 +105,22 @@ void dlio::MapNode::savePCD(std::shared_ptr<direct_lidar_inertial_odometry::srv:
 
   // save map
   int ret = pcl::io::savePCDFileBinary(p + "/dlio_map.pcd", *m);
-  res->success = ret == 0;
+  res->success = (ret == 0);
 
   if (res->success) {
     std::cout << "done" << std::endl;
   } else {
     std::cout << "failed" << std::endl;
   }
+}
+
+void dlio::MapNode::resetMap(const std::shared_ptr<std_srvs::srv::Empty::Request> req,
+                             std::shared_ptr<std_srvs::srv::Empty::Response> res) {
+  (void)req;
+  (void)res;
+  
+  std::lock_guard<std::mutex> lock(this->map_mutex);
+  this->dlio_map->clear();
+  
+  RCLCPP_INFO(this->get_logger(), "Global Map Cleared for New Floor transition.");
 }

@@ -16,6 +16,7 @@
 #include <queue>
 
 #include "rclcpp/qos.hpp"
+#include <std_srvs/srv/set_bool.hpp>
 
 dlio::OdomNode::OdomNode() : Node("dlio_odom_node") {
 
@@ -54,6 +55,11 @@ dlio::OdomNode::OdomNode() : Node("dlio_odom_node") {
 
   this->publish_timer = this->create_wall_timer(std::chrono::duration<double>(0.01), 
       std::bind(&dlio::OdomNode::publishPose, this));
+
+  // Initialize Pause Service
+  this->is_paused = false;
+  this->pause_srv = this->create_service<std_srvs::srv::SetBool>("pause_odom",
+      std::bind(&dlio::OdomNode::callbackPause, this, std::placeholders::_1, std::placeholders::_2));
 
   this->T = Eigen::Matrix4f::Identity();
   this->T_prior = Eigen::Matrix4f::Identity();
@@ -601,7 +607,7 @@ void dlio::OdomNode::deskewPointcloud() {
   // sort points by timestamp and build list of timestamps
   std::function<bool(const PointType&, const PointType&)> point_time_cmp;
   std::function<bool(boost::range::index_value<PointType&, long>,
-                     boost::range::index_value<PointType&, long>)> point_time_neq;
+                       boost::range::index_value<PointType&, long>)> point_time_neq;
   std::function<double(boost::range::index_value<PointType&, long>)> extract_point_time;
 
   if (this->sensor == dlio::SensorType::OUSTER) {
@@ -645,7 +651,7 @@ void dlio::OdomNode::deskewPointcloud() {
 
   // copy points into deskewed_scan_ in order of timestamp
   std::partial_sort_copy(this->original_scan->points.begin(), this->original_scan->points.end(),
-                         deskewed_scan_->points.begin(), deskewed_scan_->points.end(), point_time_cmp);
+                           deskewed_scan_->points.begin(), deskewed_scan_->points.end(), point_time_cmp);
 
   // filter unique timestamps
   auto points_unique_timestamps = deskewed_scan_->points
@@ -689,7 +695,7 @@ void dlio::OdomNode::deskewPointcloud() {
   // IMU prior & deskewing for second scan onwards
   std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> frames;
   frames = this->integrateImu(this->prev_scan_stamp, this->lidarPose.q, this->lidarPose.p,
-                              this->geo.prev_vel.cast<float>(), timestamps);
+                                this->geo.prev_vel.cast<float>(), timestamps);
   this->deskew_size = frames.size(); // if integration successful, equal to timestamps.size()
 
   // if there are no frames between the start and end of the sweep
@@ -755,6 +761,7 @@ void dlio::OdomNode::initializeDLIO() {
 }
 
 void dlio::OdomNode::callbackPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
+  if (this->is_paused) { return; }
 
   std::unique_lock<decltype(this->main_loop_running_mutex)> lock(main_loop_running_mutex);
   this->main_loop_running = true;
@@ -857,7 +864,8 @@ void dlio::OdomNode::callbackPointCloud(const sensor_msgs::msg::PointCloud2::Sha
 }
 
 void dlio::OdomNode::callbackImu(const sensor_msgs::msg::Imu::SharedPtr imu_raw) {
-
+  if (this->is_paused) { return; }
+  
   this->first_imu_received = true;
 
   sensor_msgs::msg::Imu::SharedPtr imu = this->transformImu( imu_raw );
@@ -1076,7 +1084,7 @@ bool dlio::OdomNode::imuMeasFromTimeRange(double start_time, double end_time,
 
 std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>>
 dlio::OdomNode::integrateImu(double start_time, Eigen::Quaternionf q_init, Eigen::Vector3f p_init,
-                             Eigen::Vector3f v_init, const std::vector<double>& sorted_timestamps) {
+                               Eigen::Vector3f v_init, const std::vector<double>& sorted_timestamps) {
 
   const std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> empty;
 
@@ -1422,7 +1430,7 @@ void dlio::OdomNode::computeSpaciousness() {
   // compute range of points
   std::vector<float> ds;
 
-  for (int i = 0; i <= this->original_scan->points.size(); i++) {
+  for (int i = 0; i < this->original_scan->points.size(); i++) {
     float d = std::sqrt(pow(this->original_scan->points[i].x, 2) +
                         pow(this->original_scan->points[i].y, 2));
     ds.push_back(d);
@@ -2009,4 +2017,11 @@ void dlio::OdomNode::debug() {
 
   std::cout << "+-------------------------------------------------------------------+" << std::endl;
 
+}
+
+void dlio::OdomNode::callbackPause(const std::shared_ptr<std_srvs::srv::SetBool::Request> req,
+                                   std::shared_ptr<std_srvs::srv::SetBool::Response> res) {
+  this->is_paused = req->data;
+  res->success = true;
+  res->message = this->is_paused ? "Odometry Paused" : "Odometry Resumed";
 }
