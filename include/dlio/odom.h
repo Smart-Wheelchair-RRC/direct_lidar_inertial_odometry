@@ -21,6 +21,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_ros/transform_broadcaster.h>
+#include <std_srvs/srv/trigger.hpp>
 
 // BOOST
 #include <boost/format.hpp>
@@ -63,6 +64,8 @@ private:
   void publishCloud(pcl::PointCloud<PointType>::ConstPtr published_cloud, Eigen::Matrix4f T_cloud);
   void publishKeyframe(std::pair<std::pair<Eigen::Vector3f, Eigen::Quaternionf>,
                        pcl::PointCloud<PointType>::ConstPtr> kf, rclcpp::Time timestamp);
+  void callbackReset(const std_srvs::srv::Trigger::Request::SharedPtr req,
+                   std_srvs::srv::Trigger::Response::SharedPtr res);
 
   void getScanFromROS(const sensor_msgs::msg::PointCloud2::SharedPtr& pc);
   void preprocessPoints();
@@ -122,6 +125,9 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr kf_pose_pub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr kf_cloud_pub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr deskewed_pub;
+  
+  //Services
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_srv_;
 
   // TF
   std::shared_ptr<tf2_ros::TransformBroadcaster> br;

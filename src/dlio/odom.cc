@@ -49,6 +49,10 @@ dlio::OdomNode::OdomNode() : Node("dlio_odom_node") {
   this->kf_pose_pub  = this->create_publisher<geometry_msgs::msg::PoseArray>("kf_pose", 1);
   this->kf_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("kf_cloud", 1);
   this->deskewed_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("deskewed", 1);
+  this->reset_srv_ = this->create_service<std_srvs::srv::Trigger>(
+    "/dlio/odom/reset",
+    std::bind(&dlio::OdomNode::callbackReset, this,
+              std::placeholders::_1, std::placeholders::_2));
 
   this->br = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
 
@@ -176,6 +180,91 @@ dlio::OdomNode::OdomNode() : Node("dlio_odom_node") {
 }
 
 dlio::OdomNode::~OdomNode() {}
+
+void dlio::OdomNode::callbackReset(
+    const std_srvs::srv::Trigger::Request::SharedPtr /*req*/,
+    std_srvs::srv::Trigger::Response::SharedPtr res)
+{
+  RCLCPP_INFO(this->get_logger(),
+              "[DLIO Reset] Resetting odometry — flushing elevator drift");
+
+  // Wait for any in-flight async submap build to finish
+  if (this->submap_future.valid()) {
+    this->submap_future.wait();
+  }
+
+  // Pose + velocity (keep state.b — hardware bias constants)
+  this->state.p       = Eigen::Vector3f(0., 0., 0.);
+  this->state.q       = Eigen::Quaternionf(1., 0., 0., 0.);
+  this->state.v.lin.b = Eigen::Vector3f(0., 0., 0.);
+  this->state.v.lin.w = Eigen::Vector3f(0., 0., 0.);
+  this->state.v.ang.b = Eigen::Vector3f(0., 0., 0.);
+  this->state.v.ang.w = Eigen::Vector3f(0., 0., 0.);
+
+  // Transforms
+  this->T       = Eigen::Matrix4f::Identity();
+  this->T_prior = Eigen::Matrix4f::Identity();
+  this->T_corr  = Eigen::Matrix4f::Identity();
+  this->origin  = Eigen::Vector3f(0., 0., 0.);
+
+  this->lidarPose.p = Eigen::Vector3f(0., 0., 0.);
+  this->lidarPose.q = Eigen::Quaternionf(1., 0., 0., 0.);
+  this->imuPose.p   = Eigen::Vector3f(0., 0., 0.);
+  this->imuPose.q   = Eigen::Quaternionf(1., 0., 0., 0.);
+
+  // Keyframes + submap
+  {
+    std::lock_guard<std::mutex> kf_lock(this->keyframes_mutex);
+    this->keyframes.clear();
+    this->keyframe_timestamps.clear();
+    this->keyframe_normals.clear();
+    this->keyframe_transformations.clear();
+  }
+  this->num_processed_keyframes = 0;
+  this->keyframe_cloud = std::make_shared<const pcl::PointCloud<PointType>>();
+
+  this->submap_cloud = std::make_shared<const pcl::PointCloud<PointType>>();
+  this->submap_normals.reset();
+  this->submap_kdtree.reset();
+  this->submap_kf_idx_curr.clear();
+  this->submap_kf_idx_prev.clear();
+  this->submap_hasChanged   = true;
+  this->new_submap_is_ready = false;
+
+  // Trajectory + published paths
+  this->trajectory.clear();
+  this->length_traversed = 0.;
+  this->path_ros.poses.clear();
+  this->kf_pose_ros.poses.clear();
+
+  // Scan + timing — first_valid_scan=false makes next scan re-seed from T=Identity
+  this->first_valid_scan = false;
+  this->first_scan_stamp = 0.;
+  this->prev_scan_stamp  = 0.;
+  this->scan_stamp       = 0.;
+  this->elapsed_time     = 0.;
+
+  // Geometric observer
+  {
+    std::lock_guard<std::mutex> geo_lock(this->geo.mtx);
+    this->geo.first_opt_done = false;
+    this->geo.prev_vel       = Eigen::Vector3f(0., 0., 0.);
+    this->geo.prev_p         = Eigen::Vector3f(0., 0., 0.);
+    this->geo.prev_q         = Eigen::Quaternionf(1., 0., 0., 0.);
+    this->geo.dp             = 0.;
+    this->geo.dq_deg         = 0.;
+  }
+
+  // GICP
+  this->gicp.clearSource();
+  this->gicp.clearTarget();
+  this->gicp_hasConverged = false;
+
+  // NOT reset: imu_calibrated, dlio_initialized, state.b, imu_buffer
+  res->success = true;
+  res->message = "DLIO odom reset complete — ready for new floor";
+  RCLCPP_INFO(this->get_logger(), "[DLIO Reset] Done");
+}
 
 void dlio::OdomNode::getParams() {
 
