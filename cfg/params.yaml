@@ -12,6 +12,7 @@
 
 /**:
   ros__parameters:
+    # [DOCS] Parameter changed from upstream default — see docs/LOCALIZATION_NAV_DOCS.md#dlio-changes-from-upstream
     use_sim_time: false
     frames/odom: odom
     frames/baselink: base_footprint
@@ -22,6 +23,7 @@
     map/dense/filtered: false
     map/sparse/leafSize: 0.25
 
+    # [DOCS] Parameter changed from upstream default — see docs/LOCALIZATION_NAV_DOCS.md#dlio-changes-from-upstream
     odom/gravity: 0.0
     odom/computeTimeOffset: true
 

@@ -1802,6 +1802,8 @@ void dlio::OdomNode::pauseSubmapBuildIfNeeded() {
   this->submap_build_cv.wait(lock, [this]{ return !this->main_loop_running; });
 }
 
+// [DOCS] Modified from upstream — see docs/LOCALIZATION_NAV_DOCS.md#dlio-changes-from-upstream
+// Upstream: https://github.com/vectr-ucla/direct_lidar_inertial_odometry/blob/feature/ros2/src/dlio/odom.cc#L1887
 void dlio::OdomNode::debug() {
 
   // Total length traversed
