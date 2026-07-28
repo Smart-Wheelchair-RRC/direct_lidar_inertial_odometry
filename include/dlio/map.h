@@ -50,6 +50,9 @@ private:
   void resetMap(const std::shared_ptr<std_srvs::srv::Empty::Request> req,
                 std::shared_ptr<std_srvs::srv::Empty::Response> res);
 
+  rclcpp::CallbackGroup::SharedPtr keyframe_cb_group;
+  rclcpp::CallbackGroup::SharedPtr save_pcd_cb_group;
+  
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr keyframe_sub;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub;
 
