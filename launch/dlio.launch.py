@@ -19,9 +19,11 @@ def generate_launch_description():
     current_pkg = FindPackageShare('direct_lidar_inertial_odometry')
 
     # Set default arguments
+    # [DOCS] Modified from upstream — see docs/LOCALIZATION_NAV_DOCS.md#dlio-changes-from-upstream
+    # Upstream: https://github.com/vectr-ucla/direct_lidar_inertial_odometry/blob/feature/ros2/launch/dlio.launch.py#L23
     rviz = LaunchConfiguration('rviz', default='false')
-    pointcloud_topic = LaunchConfiguration('pointcloud_topic', default='/livox/lidar_inverted')
-    imu_topic = LaunchConfiguration('imu_topic', default='/livox/imu_inverted')
+    pointcloud_topic = LaunchConfiguration('pointcloud_topic', default='/livox/lidar')
+    imu_topic = LaunchConfiguration('imu_topic', default='/livox/imu')
 
     # Define arguments
     declare_rviz_arg = DeclareLaunchArgument(
@@ -53,6 +55,7 @@ def generate_launch_description():
         remappings=[
             ('pointcloud', pointcloud_topic),
             ('imu', imu_topic),
+            # [DOCS] Modified from upstream — see docs/LOCALIZATION_NAV_DOCS.md#dlio-changes-from-upstream
             ('odom', '/Odometry'),
             ('pose', 'dlio/odom_node/pose'),
             ('path', 'dlio/odom_node/path'),
